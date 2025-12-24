@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prinaince :: Admin Panel</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Supabase SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        brand: '#f59e0b', // Amber
+                        dark: '#09090b',  // Zinc-950
+                        surface: '#18181b' // Zinc-900
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #09090b;
+            color: #a1a1aa;
+            background-image: radial-gradient(#27272a 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+
+        .fade-in { animation: fadeIn 0.4s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Custom Scrollbar */
+        .scroller::-webkit-scrollbar { width: 6px; }
+        .scroller::-webkit-scrollbar-track { background: #18181b; }
+        .scroller::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 3px; }
+        .scroller::-webkit-scrollbar-thumb:hover { background: #f59e0b; }
+
+        /* Input Styling */
+        .input-base {
+            background: #09090b;
+            border: 1px solid #27272a;
+            transition: all 0.2s;
+        }
+        .input-base:focus {
+            border-color: #f59e0b;
+            box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.2);
+        }
+    </style>
+</head>
+<body class="font-sans min-h-screen selection:bg-brand selection:text-black flex flex-col relative">
+
+    <!-- EDIT MODAL (New Feature) -->
+    <div id="edit-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm fade-in">
+        <div class="w-full max-w-md bg-surface border border-zinc-700 p-6 rounded-xl shadow-2xl relative">
+            <button onclick="closeEdit()" class="absolute top-4 right-4 text-zinc-500 hover:text-white">
+                <i class="fa-solid fa-xmark text-xl"></i>
+            </button>
+            
+            <h3 class="text-white font-bold text-lg mb-6 flex items-center gap-2">
+                <i class="fa-solid fa-pen-to-square text-blue-500"></i> EDIT RECORD
+            </h3>
+
+            <div class="space-y-4">
+                <input type="hidden" id="edit-id">
+                
+                <div>
+                    <label class="text-[10px] uppercase font-bold text-zinc-500">Title</label>
+                    <input id="edit-title" class="w-full input-base p-2 rounded text-white text-sm outline-none">
+                </div>
+                
+                <div>
+                    <label class="text-[10px] uppercase font-bold text-zinc-500">Poster URL</label>
+                    <input id="edit-poster" class="w-full input-base p-2 rounded text-white text-sm outline-none">
+                </div>
+                
+                <div>
+                    <label class="text-[10px] uppercase font-bold text-zinc-500">Link</label>
+                    <input id="edit-link" class="w-full input-base p-2 rounded text-white text-sm outline-none">
+                </div>
+                
+                <div>
+                    <label class="text-[10px] uppercase font-bold text-zinc-500">Description</label>
+                    <textarea id="edit-desc" rows="3" class="w-full input-base p-2 rounded text-white text-sm outline-none resize-none"></textarea>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4 mt-4">
+                    <button onclick="closeEdit()" class="bg-zinc-800 hover:bg-zinc-700 text-white py-2 rounded font-bold text-xs uppercase">Cancel</button>
+                    <button onclick="saveEdit()" class="bg-blue-600 hover:bg-blue-500 text-white py-2 rounded font-bold text-xs uppercase shadow-lg shadow-blue-500/20">Save Changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN DASHBOARD -->
+    <!-- 'hidden' class removed so it is visible immediately -->
+    <div id="dashboard" class="flex-1 max-w-[1400px] w-full mx-auto p-4 md:p-8 fade-in">
+        
+        <!-- Header -->
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 border-b border-zinc-800 pb-6">
+            <div class="flex items-center gap-4">
+                <div class="h-10 w-10 bg-brand rounded-md flex items-center justify-center text-black font-bold shadow-[0_0_15px_rgba(245,158,11,0.3)]">
+                    <i class="fa-solid fa-bolt"></i>
+                </div>
+                <div>
+                    <h2 class="text-white font-bold text-lg leading-none tracking-tight">CONTENT MANAGER</h2>
+                    <p class="text-xs text-zinc-500 font-mono mt-1">SYSTEM STATUS: <span class="text-emerald-500">● ONLINE</span></p>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-3">
+                <div id="count" class="hidden md:flex items-center gap-2 font-mono text-xs bg-surface border border-zinc-700 px-3 py-1.5 rounded text-zinc-300">
+                    <span class="w-2 h-2 bg-zinc-500 rounded-full animate-pulse"></span> Syncing...
+                </div>
+                <button onclick="location.reload()" class="text-xs font-bold text-red-400 hover:text-red-300 border border-red-900/30 bg-red-900/10 hover:bg-red-900/20 px-4 py-2 rounded transition-colors uppercase tracking-wider">
+                    <i class="fa-solid fa-power-off mr-1"></i> Refresh
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Grid -->
+        <div class="grid lg:grid-cols-12 gap-6 h-full">
+            
+            <!-- LEFT COLUMN: Upload Form -->
+            <div class="lg:col-span-4 xl:col-span-3">
+                <div class="bg-surface border border-zinc-800 rounded-xl p-6 sticky top-6 shadow-xl">
+                    <div class="flex items-center justify-between mb-6">
+                        <h3 class="text-white font-semibold text-xs uppercase tracking-widest border-l-2 border-brand pl-2">New Entry</h3>
+                        <i class="fa-solid fa-plus text-zinc-600"></i>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div class="group">
+                            <label class="text-[10px] uppercase font-bold text-zinc-500 mb-1 block group-focus-within:text-brand transition-colors">Title</label>
+                            <input id="in-title" class="w-full input-base p-3 rounded-md text-sm text-white outline-none placeholder-zinc-700" placeholder="Book Title">
+                        </div>
+
+                        <div class="group">
+                            <label class="text-[10px] uppercase font-bold text-zinc-500 mb-1 block group-focus-within:text-brand transition-colors">Poster Image</label>
+                            <input id="in-poster" class="w-full input-base p-3 rounded-md text-sm text-white outline-none placeholder-zinc-700" placeholder="Image URL">
+                        </div>
+
+                        <div class="group">
+                            <label class="text-[10px] uppercase font-bold text-zinc-500 mb-1 block group-focus-within:text-brand transition-colors">File / Drive Link</label>
+                            <input id="in-link" class="w-full input-base p-3 rounded-md text-sm text-white outline-none placeholder-zinc-700" placeholder="Book URL">
+                        </div>
+
+                        <div class="group">
+                            <label class="text-[10px] uppercase font-bold text-zinc-500 mb-1 block group-focus-within:text-brand transition-colors">Description</label>
+                            <textarea id="in-desc" rows="3" class="w-full input-base p-3 rounded-md text-sm text-white outline-none resize-none placeholder-zinc-700" placeholder="Short summary"></textarea>
+                        </div>
+
+                        <div class="h-px bg-zinc-800 my-4"></div>
+
+                        <button onclick="upload()" class="w-full bg-brand hover:bg-amber-400 text-black font-bold py-3 rounded-md transition-all shadow-[0_4px_20px_rgba(245,158,11,0.2)] flex items-center justify-center gap-2 text-sm uppercase tracking-wide">
+                            <i class="fa-solid fa-cloud-arrow-up"></i> Upload Data
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT COLUMN: Data List -->
+            <div class="lg:col-span-8 xl:col-span-9">
+                <div class="bg-surface border border-zinc-800 rounded-xl flex flex-col h-[75vh] shadow-xl overflow-hidden">
+                    <!-- List Header -->
+                    <div class="p-4 border-b border-zinc-800 bg-zinc-900/50 flex justify-between items-center backdrop-blur-sm">
+                        <h3 class="text-zinc-200 font-semibold text-xs uppercase tracking-widest">
+                            <i class="fa-solid fa-database mr-2 text-zinc-500"></i> Database Records
+                        </h3>
+                        <div class="flex gap-2">
+                            <span class="w-2 h-2 rounded-full bg-red-500/20"></span>
+                            <span class="w-2 h-2 rounded-full bg-yellow-500/20"></span>
+                            <span class="w-2 h-2 rounded-full bg-green-500/20"></span>
+                        </div>
+                    </div>
+
+                    <!-- Scrollable List Area -->
+                    <div id="admin-list" class="p-4 space-y-2 overflow-y-auto scroller flex-1 bg-[#09090b]">
+                        <!-- Loading State -->
+                        <div class="h-full flex flex-col items-center justify-center text-zinc-600 space-y-3">
+                            <i class="fa-solid fa-circle-notch fa-spin text-2xl"></i>
+                            <span class="font-mono text-xs tracking-widest">ESTABLISHING CONNECTION...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- LOGIC SCRIPT -->
+    <script>
+        // 🚨 CONFIGURATION
+        const SUPABASE_URL = 'https://dxijesrwqtypifzohxqv.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4aWplc3J3cXR5cGlmem9oeHF2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY1NTAyMTIsImV4cCI6MjA4MjEyNjIxMn0.BDgHpRrxNMzXx-9XzPXnS3Oug8ctdJrn9sYj4ED5pM0';
+        const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        let booksCache = []; // Global cache for edit functionality
+
+        // --- FETCH BOOKS (Runs Immediately) ---
+        async function fetchBooks() {
+            const list = document.getElementById('admin-list');
+            const { data, error } = await sb.from('books').select('*').order('created_at', {ascending: false});
+            
+            // Store data for edit lookup
+            if(data) booksCache = data;
+
+            document.getElementById('count').innerHTML = `<span class="w-2 h-2 bg-emerald-500 rounded-full"></span> ${data ? data.length : 0} RECORDS`;
+            list.innerHTML = '';
+
+            if(error) {
+                list.innerHTML = `<div class="p-4 text-red-500 font-mono text-center border border-red-900/30 rounded bg-red-900/10">ERROR: FAILED TO RETRIEVE DATA</div>`;
+                return;
+            }
+
+            if(data.length === 0) {
+                list.innerHTML = `<div class="h-64 flex flex-col items-center justify-center text-zinc-700 font-mono text-xs"><i class="fa-solid fa-box-open text-3xl mb-2 opacity-50"></i>NO DATA FOUND</div>`;
+                return;
+            }
+
+            data.forEach(book => {
+                const img = book.poster_url || 'https://via.placeholder.com/150/18181b/FFFFFF/?text=NULL';
+                
+                list.innerHTML += `
+                <div class="flex items-start md:items-center bg-surface border border-zinc-800 p-3 rounded-lg group hover:border-zinc-600 transition-all duration-200">
+                    <!-- Image -->
+                    <div class="w-12 h-16 md:w-14 md:h-14 flex-shrink-0 bg-zinc-900 rounded border border-zinc-700 overflow-hidden relative">
+                         <img src="${img}" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity">
+                    </div>
+                    
+                    <!-- Content -->
+                    <div class="flex-1 ml-4 min-w-0">
+                        <h4 class="text-white font-bold text-sm truncate font-mono">${book.title}</h4>
+                        <p class="text-zinc-500 text-xs line-clamp-2 mb-1 font-sans" title="${book.description || ''}">${book.description || 'No metadata'}</p>
+                        <a href="${book.book_url}" target="_blank" class="inline-flex items-center text-[10px] text-brand hover:text-amber-300 uppercase font-bold tracking-wider">
+                            <i class="fa-solid fa-link mr-1"></i> Open Resource
+                        </a>
+                    </div>
+
+                    <!-- Actions (Edit & Delete) -->
+                    <div class="flex items-center gap-2 ml-2">
+                        <!-- EDIT BUTTON -->
+                        <button onclick="openEdit(${book.id})" class="w-8 h-8 flex items-center justify-center rounded bg-zinc-800 text-zinc-500 hover:text-blue-400 hover:bg-blue-900/20 border border-zinc-700 hover:border-blue-900/50 transition-all" title="Edit Entry">
+                            <i class="fa-solid fa-pen text-xs"></i>
+                        </button>
+                        
+                        <!-- DELETE BUTTON -->
+                        <button onclick="del(${book.id})" class="w-8 h-8 flex items-center justify-center rounded bg-zinc-800 text-zinc-500 hover:text-red-400 hover:bg-red-900/20 border border-zinc-700 hover:border-red-900/50 transition-all" title="Delete Entry">
+                            <i class="fa-solid fa-trash text-xs"></i>
+                        </button>
+                    </div>
+                </div>`;
+            });
+        }
+
+        // --- UPLOAD LOGIC (CREATE) ---
+        async function upload() {
+            const btn = document.querySelector('button[onclick="upload()"]');
+            const originalHTML = btn.innerHTML;
+            
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> PROCESSING';
+            btn.classList.add('opacity-70', 'cursor-not-allowed');
+
+            const title = document.getElementById('in-title').value;
+            const desc = document.getElementById('in-desc').value;
+            const poster = document.getElementById('in-poster').value;
+            const link = document.getElementById('in-link').value;
+
+            if(!title || !link) {
+                alert('⚠️ PROTOCOL ERROR: Title and Link are mandatory fields.');
+                btn.innerHTML = originalHTML;
+                btn.classList.remove('opacity-70', 'cursor-not-allowed');
+                return;
+            }
+
+            const { error } = await sb.from('books').insert([{title, description: desc, poster_url: poster, book_url: link}]);
+            
+            if(!error) {
+                btn.innerHTML = '<i class="fa-solid fa-check"></i> UPLOAD COMPLETE';
+                btn.classList.remove('bg-brand', 'text-black');
+                btn.classList.add('bg-emerald-500', 'text-white');
+                
+                setTimeout(() => {
+                    fetchBooks();
+                    document.querySelectorAll('#in-title, #in-desc, #in-poster, #in-link').forEach(i => i.value = '');
+                    
+                    btn.classList.add('bg-brand', 'text-black');
+                    btn.classList.remove('bg-emerald-500', 'text-white');
+                    btn.innerHTML = originalHTML;
+                    btn.classList.remove('opacity-70', 'cursor-not-allowed');
+                }, 1000);
+            } else {
+                alert('SERVER ERROR: ' + error.message);
+                btn.innerHTML = originalHTML;
+                btn.classList.remove('opacity-70', 'cursor-not-allowed');
+            }
+        }
+
+        // --- EDIT PREFILL LOGIC ---
+        function openEdit(id) {
+            const book = booksCache.find(b => b.id === id);
+            if(!book) return;
+
+            document.getElementById('edit-id').value = book.id;
+            document.getElementById('edit-title').value = book.title;
+            document.getElementById('edit-poster').value = book.poster_url || '';
+            document.getElementById('edit-link').value = book.book_url;
+            document.getElementById('edit-desc').value = book.description || '';
+
+            document.getElementById('edit-modal').classList.remove('hidden');
+        }
+
+        // --- EDIT SAVE LOGIC ---
+        async function saveEdit() {
+            const id = document.getElementById('edit-id').value;
+            const title = document.getElementById('edit-title').value;
+            const poster = document.getElementById('edit-poster').value;
+            const link = document.getElementById('edit-link').value;
+            const desc = document.getElementById('edit-desc').value;
+
+            if(!title || !link) return alert('Title and Link cannot be empty.');
+
+            const btn = document.querySelector('button[onclick="saveEdit()"]');
+            const originalText = btn.innerText;
+            btn.innerText = 'SAVING...';
+
+            const { error } = await sb.from('books').update({ 
+                title, 
+                poster_url: poster, 
+                book_url: link, 
+                description: desc 
+            }).eq('id', id);
+
+            if(!error) {
+                closeEdit();
+                fetchBooks();
+                btn.innerText = originalText;
+            } else {
+                alert('Update Failed: ' + error.message);
+                btn.innerText = originalText;
+            }
+        }
+
+        function closeEdit() {
+            document.getElementById('edit-modal').classList.add('hidden');
+        }
+
+        // --- DELETE LOGIC ---
+        async function del(id) {
+            if(confirm('⚠️ WARNING: Irreversible Action.\nConfirm deletion of this record?')) {
+                await sb.from('books').delete().eq('id', id);
+                fetchBooks();
+            }
+        }
+
+        // Initial fetch
+        fetchBooks();
+    </script>
+</body>
+</html>
